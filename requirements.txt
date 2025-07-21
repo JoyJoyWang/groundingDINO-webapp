@@ -1,6 +1,5 @@
 flask
 opencv-python-headless
-torch
-torchvision
 Pillow
 supervision
+numpy==2.0.2

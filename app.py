@@ -5,6 +5,7 @@ import os
 from PIL import Image
 import io
 import uuid
+import numpy as np
 
 # app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='frontend')
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
@@ -47,6 +48,16 @@ def index():
 def upload():
     try:
         files = request.files.getlist("images")
+        box_threshold = float(request.form.get("box_threshold", 0.15))
+        text_threshold = float(request.form.get("text_threshold", 0.15))
+        user_prompt = request.form.get("prompt", "").strip()
+        # Extract user keywords (comma or space separated)
+        user_keywords = [w.strip().lower() for w in user_prompt.split(",") if w.strip()] if user_prompt else []
+        # Combine base prompt and user prompt for the model
+        if user_keywords:
+            combined_prompt = TEXT_PROMPT + ", " + ", ".join(user_keywords)
+        else:
+            combined_prompt = TEXT_PROMPT
         results = []
         for file in files:
             if not file.filename.lower().endswith((".jpg", ".jpeg", ".png")):
@@ -55,7 +66,7 @@ def upload():
             img_path = os.path.join(UPLOAD_DIR, f"{uid}.jpg")
             file.save(img_path)
 
-            annotated_img = run_inference(img_path, TEXT_PROMPT)
+            annotated_img = run_inference(img_path, combined_prompt, box_threshold, text_threshold, user_keywords)
             print(f"annotated_img type: {type(annotated_img)}")  # Debug
 
             if hasattr(annotated_img, 'dtype') and hasattr(annotated_img, 'shape'):
@@ -63,17 +74,14 @@ def upload():
                     annotated_img = np.clip(annotated_img, 0, 255).astype(np.uint8)
                 output_path = os.path.join(UPLOAD_DIR, f"{uid}_output.jpg")
                 Image.fromarray(annotated_img).save(output_path)
-                results.append(f"{uid}_output.jpg")
-
+                results.append({
+                    "output": f"{uid}_output.jpg"
+                })
             else:
                 print("annotated_img is invalid")
                 continue
-
-
-
         print("results:", results)
         return jsonify({"results": results})
-
     except Exception as e:
         print("Exception:", e)
         import traceback
